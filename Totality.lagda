@@ -1,9 +1,17 @@
 \documentclass{llncs}
 \usepackage{a4}
+\usepackage{upgreek}
 
 %if False
 \begin{code}
+{-# OPTIONS --copatterns #-}
 module Totality where
+
+_o_ : {A : Set}{B : A -> Set}{C : (a : A) -> B a -> Set}
+  (f : {a : A}(b : B a) -> C a b)(g : (a : A) -> B a) ->
+  (a : A) -> C a (g a)
+f o g = \ x -> f (g x)
+infixr 2 _o_
 \end{code}
 %endif
 
@@ -152,6 +160,7 @@ over the possible meaningful responses in the dependent type |T s|. The
 `bind' operation for the monad |General S T| substitutes computations for
 values to build larger computations.
 
+%format forall = "\mathkw{\forall}"
 %format >>= = "\F{>\!\!>\!\!=}"
 %format _>>=_ = _ "\!" >>= "\!" _
 \begin{code}
@@ -170,6 +179,19 @@ call : forall {S T} -> (s : S) -> General S T (T s)
 call s = command s \ t -> return t
 \end{code}
 
+
+\textbf{For crying out loud, construct these things as monad morphisms.}
+%format foldGen = "\F{foldGen}"
+\begin{code}
+foldGen :  forall {S}{T}{X Y : Set} ->
+           (X -> Y) -> ((s : S) -> (T s -> Y) -> Y) ->
+           General S T X -> Y
+foldGen r c (return x)     = r x
+foldGen r c (command s k)  = c s \ t -> foldGen r c (k t)
+\end{code}
+\textbf{Assume ext and show that always generates monad morphisms.}
+
+
 %format PiG = "\F{PiG}"
 If we build a command-response tree from individual |call|s, we give a
 strategy for interacting with an oracle which responds to commands |s : S|
@@ -185,8 +207,7 @@ of zero or more recursive calls.
 %format expand = "\F{expand}"
 \begin{code}
 expand : forall {S T X} -> PiG S T -> General S T X -> General S T X
-expand f (return x)     = return x
-expand f (command s g)  = f s >>= \ t -> expand f (g t)
+expand f = foldGen return (_>>=_ o f)
 \end{code}
 %format gf = "\F{f}"
 You will have noticed that |call : PiG S T|, and that |expand call| just
@@ -197,15 +218,22 @@ strategy, taking |f = \ s -> call s| amounts to the often valid but seldom helpf
   |gf s = gf s|
 \]
 
-\textbf{For crying out loud, construct these things as monad morphisms.}
 
 By way of example, let us consider the evolution of state machines. We shall
 need Boolean values:
 %format Bool = "\D{Bool}"
 %format tt = "\C{t\!t}"
 %format ff = "\C{f\!f}"
+%format if = "\F{if}"
+%format then = "\F{then}"
+%format else = "\F{else}"
+%format if_then_else_ = if _ then _ else _
 \begin{code}
 data Bool : Set where tt ff : Bool
+
+if_then_else_ : {X : Set} -> Bool -> X -> X -> X
+if tt then t else f = t
+if ff then t else f = f
 \end{code}
 Now let us construct the method for computing the halting state of a machine,
 given its initial state and its one-step transition function.
@@ -263,20 +291,343 @@ If we consider |Nat| with the usual order and |Maybe X| ordered by
 more fuel can only (but sadly not strictly) increase the risk of
 successfully delivering output.
 
+An amusing possibility in a system such as Agda, supporting the
+partial evaluation of incomplete expressions, is to invoke |petrol|
+with |?| as the quantity of fuel. We are free to refine the |?| with
+|suc ?| and resume evaluation repeatedly for as long as we are
+willing to wait in expectation of a |yes|. Whilst this may be a clunky
+way to signal continuing consent for execution, compared to the simple
+maintenance of the electricity supply, it certainly simulates the
+conventional experience of executing a general recursive
+program.
+
+What, then, is the substance of the often repeated claim that a total
+language capable of this construction is not Turing-complete?  Just
+this: there is more to delivering the run time execution semantics of
+programs than the pure evaluation of expressions. The \emph{language}
+might thus be described as Turing-incomplete, even though the
+\emph{system} by which you use it allows you to execute arbitrary
+recursive computations for as long as you are willing to tolerate.
+Such a pedantic quibble deserves to be taken seriously inasmuch as it
+speaks against casually classifying a \emph{language} as
+Turing-complete or otherwise, without clarifying the variety of its
+semanticses and the relationships between them.
+
 
 \section{Capretta's Coinductive Semantics}
 
-\textbf{Use copatterns.}
+Coinduction in dependent type theory remains a vexed issue: we are gradually
+making progress towards a presentation of productive programming for infinite
+data structures, but we can certainly not claim that we have a presentation
+which combines honesty, convenience and compositionality. Here, I shall need
+only the first of those virtues, so I shall make do with the current Agda
+account, based on the notion of \emph{copatterns}~\cite{DBLP:conf/popl/AbelPTS13}.
+The copattern literature tends to give examples of copattern programming
+involving only product structures, notably streams, but Capretta requires us
+to risk a sum.
+
+%format + = "\D{+}"
+%format _+_ = _ + _
+%format inl = "\C{inl}"
+%format inr = "\C{inr}"
+\begin{code}
+data _+_ (S T : Set) : Set where
+  inl : S -> S + T
+  inr : T -> S + T
+
+[_,_] : {S T X : Set} -> (S -> X) -> (T -> X) -> S + T -> X
+[ f , g ] (inl s) = f s
+[ f , g ] (inr t) = g t
+\end{code}
+
+%format Delay = "\D{Delay}"
+%format force = "\F{force}"
+%format coinductive = "\mathkw{coinductive}"
+We may now define the indefinite |Delay| operator as a coinductive record type
+whose values are constructed on demand, when the |force| field is projected.
+\begin{code}
+record Delay (X : Set) : Set where
+  coinductive
+  field
+    force : X + Delay X
+open Delay
+\end{code}
+
+Thus equipped, we can build a |Delay X| value by stepping a computation
+which can choose either to deliver an |X| or to continue.
+
+Sadly, the following code fails Agda's rather syntactic productivity check.
+%format unfold = "\F{unfold}"
+%format help = "\F{help}"
+%format o = "\F{\cdot}"
+\begin{spec}
+unfold : forall {X Y} -> (Y -> X + Y) -> Y -> Delay X
+force (unfold f y) = [ inl , inr o unfold f ] (f y)
+\end{spec}
+However, brute force inlining of the case analysis saves the day.
+\begin{code}
+unfold : forall {X Y} -> (Y -> X + Y) -> Y -> Delay X
+force (unfold {X}{Y} f y) = help (f y) where
+  help : X + Y -> X + Delay X
+  help (inl x)  = inl x
+  help (inr y)  = inr (unfold f y)
+\end{code}
+
+%format _D>=_ = _>>=_
+%format lego = "\F{lego}"
+%format rigo = "\F{rigo}"
+Capretta explored the use of |Delay| as a monad to model general recursion,
+giving a presentation of a language with an operator seeking the minimum number
+satisfying a test. Given |unfold|, we may equip |Delay| with a `bind' operator.
+At any stage, we are executing either the first computation\footnote{For legal
+reasons, I note that the function |lego|, below, has no connection with the
+proof assistant of that name.} |dx : Delay X|
+or its continuation, instantiated with a given |x|.%format D>= = >>=
+\begin{code}
+Dret : forall {X} -> X -> Delay X
+force (Dret x) = inl x
+
+later : forall {X} -> Delay X -> Delay X
+force (later dx) = inr dx
+
+_D>=_ : forall {X Y} -> Delay X -> (X -> Delay Y) -> Delay Y
+_D>=_ {X}{Y} dx k = unfold [ lego , rigo ] (inl dx) where
+  rigo : Delay Y -> Y + (Delay X + Delay Y)
+  rigo dy with force dy
+  ... | inl y    = inl y            -- finished
+  ... | inr dy'  = inr (inr dy')    -- running |k x|
+  lego : Delay X -> Y + (Delay X + Delay Y)
+  lego dx with force dx
+  ... | inl x    = rigo (k x)       -- invoking |k| with |x|
+  ... | inr dx'  = inr (inl dx')    -- running |dx|
+\end{code}
+
+
+By way of connecting the Capretta semantics with the petrol-driven variety,
+we may equip every |Delay| process with a monotonic |engine|.
+%format engine = "\F{engine}"
+\begin{code}
+engine : forall {X} -> Delay X -> Nat -> Maybe X
+engine dx n        with force dx
+engine dx n        | inl x    = yes x
+engine dx zero     | inr _    = no
+engine dx (suc n)  | inr dx'  = engine dx' n
+\end{code}
+
+%format tryMorePetrol = "\F{tryMorePetrol}"
+%format try = "\F{try}"
+%format minimize = "\F{minimize}"
+Moreover, given a petrol-driven process, we can just keep trying more and more
+fuel. This is one easy way to write the minimization operator.
+\begin{code}
+tryMorePetrol : forall {X} -> (Nat -> Maybe X) -> Delay X
+tryMorePetrol {X} f = unfold try zero where
+  try : Nat -> X + Nat
+  try n  with  f n
+  ...    |     yes x  = inl x
+  ...    |     no     = inr (suc n)
+
+minimize : (Nat -> Bool) -> Delay Nat
+minimize test = tryMorePetrol \ n -> if test n then yes n else no
+\end{code}
+
+Our command-response characterization of general recursion is readily
+mapped onto |Delay|. The coalgebra of the |unfold| just expands the topmost
+node of the call graph.
+%format delay = "\F{delay}"
+%format go = "\F{go}"
+\begin{code}
+delay : forall {S T} -> PiG S T -> (s : S) -> Delay (T s)
+delay {S}{T} f s = unfold go (f s) where
+  go : forall {X} -> General S T X -> X + (General S T X)
+  go (return t)     = inl t
+  go (command s g)  = inr (f s >>= g)
+\end{code}
+
+\section{Completely Iterative Monads}
+
+The \emph{completely iterative} monad generated by a command-response system
+is given by the possibly infinite command-response trees with values at whatever
+leaves may be reachable. When we inspect the top of such a tree, we will find
+either a leaf or the dependent pair of a command and its resumption.
+
+%format Sg = "\D{\Upsigma}"
+%format , = "\C{,}\:"
+%format fst = "\F{fst}"
+%format snd = "\F{snd}"
+%format constructor = "\mathkw{constructor}"
+%format comIt = "\F{comIt}"
+%format ComIt = "\D{ComIt}"
+%format cocall = "\F{call}"
+%format top = "\F{top}"
+\begin{code}
+record Sg (S : Set)(T : S -> Set) : Set where
+  constructor _,_
+  field
+    fst  : S
+    snd  : T fst
+open Sg
+
+record ComIt (S : Set)(T : S -> Set)(X : Set) : Set where
+  coinductive
+  field
+    top : X + Sg S \ s -> T s -> ComIt S T X
+open ComIt
+\end{code}
+
+As with |Delay|, let us minimize our reliance on Agda's built in treatment of
+coinduction and generate completely iterative computations only by
+unfolding coalgebras. 
+
+\begin{code}
+
+comIt :  forall {S T X Y} ->
+         (Y -> X + Sg S \ s -> T s -> Y) -> Y -> ComIt S T X
+top (comIt {S}{T}{X}{Y} f y) = help (f y) where
+  help : (X + Sg S \ s -> T s -> Y) -> X + Sg S \ s -> T s -> ComIt S T X
+  help (inl x)        = inl x
+  help (inr (s , k))  = inr (s , \ t -> comIt f (k t))
+
+cocall : forall {S T} -> (s : S) -> ComIt S T (T s)
+cocall {S}{T} s = comIt go no where
+  go : Maybe (T s) -> T s + Sg S \ s' -> T s' -> Maybe (T s)
+  go no       = inr (s , yes)
+  go (yes t)  = inl t
+\end{code}
+
+The `bind' for the completely iterative monad is definable via |comIt| using
+the same kind of coalgebra as we used for |Delay|.
+%format _C>=_ = _>>=_
+\begin{code}
+_C>=_ :  forall {S T X Y} ->
+         ComIt S T X -> (X -> ComIt S T Y) -> ComIt S T Y
+_C>=_ {S}{T}{X}{Y} cx k = comIt [ lego , rigo ] (inl cx) where
+  rigo : ComIt S T Y -> Y + Sg S \ s -> T s -> ComIt S T X + ComIt S T Y
+  rigo cy with top cy
+  ... | inl y        = inl y
+  ... | inr (s , g)  = inr (s , \ t -> inr (g t))
+  lego : ComIt S T X -> Y + Sg S \ s -> T s -> ComIt S T X + ComIt S T Y
+  lego cx with top cx
+  ... | inl x        = rigo (k x)
+  ... | inr (s , g)  = inr (s , \ t -> inl (g t))
+\end{code}
+
+%format One = "\D{One}"
+%format <> = "\C{\langle\rangle}"
+%format DELAY = "\F{DELAY}"
+%format yield = "\F{yield}"
+It should thus be no surprise that the |Delay| monad can be seen as
+the trivial instance of |ComIt|. The generic effect is the operation whose input
+and output carry no information: it amounts to |yield|ing control to the environment,
+offering no data, except a continuation to be invoked with no new information. The
+environment can choose whether or not the continuation gets invoked.
+
+%format DELAY = "\F{Delay}"
+\begin{code}
+record One : Set where constructor <>
+
+DELAY  :  Set -> Set
+DELAY  =  ComIt One \ _ -> One
+
+yield  :  One -> DELAY One
+yield  _  = cocall <>
+\end{code}
+
+
+
 
 
 \section{An Introduction or Reimmersion in Induction-Recursion}
 
 \textbf{And remember, IR codes form a free (relative) monad.}
 
+%format IR = "\D{IR}"
+%format iota = "\C{\upiota}"
+%format sigma = "\C{\upsigma}"
+%format delta = "\C{\updelta}"
+%format <! = "\F{\llbracket}"
+%format !> = "\F{\rrbracket}"
+%format !>Set = !> "_{\D{Set}}"
+%format <!_!>Set = <! _ !>Set
+%format !>out = !> "_{\F{out}}"
+%format <!_!>out = <! _ !>out
+%format -:> = "\F{\dot{\to}}"
+%format _-:>_ = _ -:> _
+%format Mu = "\D{\upmu}"
+%format decode = "\F{decode}"
+%format oo = "\V{o}"
+%format << = "\C{\langle}"
+%format >> = "\C{\rangle}"
+%format <<_>> = << _ >>
+%format IndRec = "\F{IndRec}"
+%format IndRecType = "\F{IndRecType}"
+%format IndRecDescription = "\F{IndRecDescription}"
+%format IndRecInterpretation = "\F{IndRecInterpretation}"
+%format IndRecDescription.IndRecInterpretation = IndRecDescription "." IndRecInterpretation
+%format Dummy = "\F{Dummy}"
+%format Set1 = Set "_{\D{1}}"
+
+\begin{code}
+_-:>_ : {S : Set}(X Y : S -> Set) -> Set
+X -:> Y = forall {s} -> X s -> Y s
+
+module IndRec {S : Set}(I : S -> Set) where
+  data IR (O : Set) : Set1 where
+    iota   : (oo : O)                                                     -> IR O
+    sigma  : (A : Set)(T : A -> IR O)                                     -> IR O
+    delta  : (B : Set)(s : B -> S)(T : (i : (b : B) -> I (s b)) -> IR O)  -> IR O
+
+  <!_!>Set :  forall {O}(T : IR O)(X : S -> Set)(i : X -:> I) -> Set
+  <!_!>out :  forall {O}(T : IR O)(X : S -> Set)(i : X -:> I) -> <! T !>Set X i -> O
+
+  <! iota oo      !>Set  X i = One
+  <! sigma A T    !>Set  X i = Sg A \ a -> <! T a !>Set X i
+  <! delta B s T  !>Set  X i = Sg ((b : B) -> X (s b)) \ r -> <! T (i o r) !>Set X i
+
+  <! iota oo      !>out  X i <>       = oo
+  <! sigma A T    !>out  X i (a , t)  = <! T a !>out X i t
+  <! delta B s T  !>out  X i (r , t)  = <! T (i o r) !>out X i t
+\end{code}
+
+\begin{code}
+  module IndRecType where
+    data Mu (F : (s : S) -> IR (I s))(s : S) : Set
+\end{code}
+%if False
+\begin{code}
+    {-# NO_TERMINATION_CHECK #-}  -- inlining removes the need for this
+\end{code}
+%endif
+\begin{code}
+    decode :  forall {F} -> Mu F -:> I
+
+    data Mu F s where
+      <<_>> : <! F s !>Set (Mu F) decode -> Mu F s
+
+    decode {F}{s} << t >> = <! F s !>out (Mu F) decode t
+
+open IndRec
+open module Dummy {S}{I} = IndRec.IndRecType {S} I
+\end{code}
+
+
 
 \section{The Bove-Capretta Construction}
 
 \textbf{It just might also be a monad morphism.}
+
+\begin{code}
+genIR : forall {S T X} -> General S T X -> IR T X
+genIR (return x)     = iota x
+genIR (command s k)  = delta One (\ _ -> s) \ t -> genIR (k (t <>))
+
+DOM : forall {S T} -> PiG S T -> (s : S) -> IR T (T s)
+DOM f s = genIR (f s)
+
+bove : forall {S T}(f : PiG S T) -> ((s : S) -> Mu (DOM f) s) -> (s : S) -> T s
+bove f allInDom = decode o allInDom
+\end{code}
+
 
 
 \section{The Graph Construction and Graph Induction}
