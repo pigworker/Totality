@@ -1,3 +1,4 @@
+.DS*
 *.agdai
 *.tex
 *.aux

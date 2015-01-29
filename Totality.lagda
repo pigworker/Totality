@@ -1,4 +1,4 @@
-\documentclass{article}
+\documentclass{llncs}
 \usepackage{a4}
 
 %if False
@@ -64,22 +64,27 @@ module Totality where
 
 %format -> = "\blue{\rightarrow}"
 
-\begin{document}
 \title{Totality versus Turing-Completeness?}
 \author{Conor McBride}
+\institute
+  {University of Strathclyde\\
+   \email{conor@@strictlypositive.org}
+  }
+
+\begin{document}
 \maketitle
 
 \section{Introduction}
 
 Advocates of Total Functional Programming~\cite{Turner04}, amongst
 whom I number, can prove prone to a false confession, namely that the
-price to ensure functions are worthy of the name is the loss of Turing-
-completeness. In a total functional programming language, to construct a
-value $f : S\to T$ is to promise a canonical $T$ eventually, given a
-canonical $S$. The alleged benefit of general recursion is just to inhibit
-the making of such a promise. To make a weaker promise, one need merely
-construct a total function of type $S\to G\:T$ where $G$ is a suitably
-chosen monad.
+price to ensure functions are worthy of the name is the loss of
+Turing-completeness. In a total functional programming language, to
+construct a value $f : S\to T$ is to promise a canonical $T$
+eventually, given a canonical $S$. The alleged benefit of general
+recursion is just to inhibit the making of such a promise. To make a
+weaker promise, one need merely construct a total function of type
+$S\to G\:T$ where $G$ is a suitably chosen monad.
 
 The literature and lore of our discipline are littered with candidates
 for $G$, and this article will contribute another---the \emph{free}
@@ -88,10 +93,10 @@ monad with one operation $f : S\to T$. To work in such a monad is to
 it might be \emph{executed}. We are then free, in the technical sense,
 to choose any semantics for general recursion we like, including one
 which captures permission to execute unless interrupted by
-control-C. The latter semantics is delivered by Venanzio Capretta's partiality
+control-C. Indeed, the latter semantics is delivered by Venanzio Capretta's partiality
 monad~\cite{DBLP:journals/lmcs/Capretta05}, also known as the
 \emph{completely iterative} monad on the operation
-$\mathit{yield}:1\to 1$ which might never deliver a value but periodically
+$\mathit{yield}:1\to 1$, which might never deliver a value but periodically
 offers its environment the choice of whether or not to continue.
 
 Meanwhile, Ana Bove gave, with Capretta, a method for defining the
@@ -183,13 +188,16 @@ expand : forall {S T X} -> PiG S T -> General S T X -> General S T X
 expand f (return x)     = return x
 expand f (command s g)  = f s >>= \ t -> expand f (g t)
 \end{code}
+%format gf = "\F{f}"
 You will have noticed that |call : PiG S T|, and that |expand call| just
 replaces one |command| with another, acting as the identity. As a recursive
-strategy |call = \ s -> call s| amounts to the often valid but seldom helpful
+strategy, taking |f = \ s -> call s| amounts to the often valid but seldom helpful
 `definition':
 \[
-  |f s = f s|
+  |gf s = gf s|
 \]
+
+\textbf{For crying out loud, construct these things as monad morphisms.}
 
 By way of example, let us consider the evolution of state machines. We shall
 need Boolean values:
@@ -199,7 +207,7 @@ need Boolean values:
 \begin{code}
 data Bool : Set where tt ff : Bool
 \end{code}
-Now let us explain the method for computing the halting state of a machine,
+Now let us construct the method for computing the halting state of a machine,
 given its initial state and its one-step transition function.
 %format halting = "\F{halting}"
 \begin{code}
@@ -254,6 +262,27 @@ If we consider |Nat| with the usual order and |Maybe X| ordered by
 |no < yes x|, we can readily check that |engine c| is monotone: supplying
 more fuel can only (but sadly not strictly) increase the risk of
 successfully delivering output.
+
+
+\section{Capretta's Coinductive Semantics}
+
+\textbf{Use copatterns.}
+
+
+\section{An Introduction or Reimmersion in Induction-Recursion}
+
+\textbf{And remember, IR codes form a free (relative) monad.}
+
+
+\section{The Bove-Capretta Construction}
+
+\textbf{It just might also be a monad morphism.}
+
+
+\section{The Graph Construction and Graph Induction}
+
+
+\section{Conclusion}
 
 
 \bibliographystyle{plainnat}
