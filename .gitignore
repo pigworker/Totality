@@ -4,4 +4,7 @@
 *.ptb
 *.log
 *.dvi
+*.bbl
+*.blg
+*.pdf
 *~
