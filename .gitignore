@@ -1,1 +1,7 @@
 *.agdai
+*.tex
+*.aux
+*.ptb
+*.log
+*.dvi
+*~
