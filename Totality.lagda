@@ -279,9 +279,7 @@ However, we can represent its definition without such controversy.
 \begin{code}
 fusc : PiG Nat \ _ -> Nat
 fusc zero     =  !! zero
-fusc (suc n)  =  call n   G>= \ fn   ->
-                 call fn  G>= \ ffn  ->
-                 !! (suc ffn)
+fusc (suc n)  =  call n G>= \ fn -> call fn  G>= \ ffn -> !! (suc ffn)
 \end{code}
 Each |call| is only a \emph{placeholder} for a recursive call to
 |fusc|. The latter tells us just how to expand the recursion
@@ -294,10 +292,13 @@ Even so, it is fair to object that the `monadified' definition
 is ugly compared to its direct but not obviously terminating
 counterpart, with more intermediate naming. Monadic
 programming is ugly in general, not just in |General|!  Languages like
-Bauer and Pretnar's \emph{Eff}~\cite{eff} show us that we can solve
+Bauer and Pretnar's \emph{Eff}~\cite{DBLP:journals/jlp/BauerP15}
+show us that we can solve
 this problem, working in direct style for whatever effectful interface
 is locally available, but meaning the computation delivered by the
-appropriate Moggi-style translation~\cite{moggi}. There is no need to
+appropriate Moggi-style translation into an explicitly monadic
+kernel~\cite{DBLP:conf/lics/Moggi89}.
+There is no need to
 consider monadic style a just punishment, whatever your impurity.
 
 By choosing the |General| monad, we have not committed to any notion
@@ -317,8 +318,8 @@ notation without fear of missing significant developments.
 
 %format Kleisli = "\D{Kleisli}"
 Let us introduce the notion of a |Kleisli| structure on sets,
-as Altenkirch and Reus called it, also known to Altenkirch, Chapman and
-Uustalu as a `relative' monad.
+as Altenkirch and Reus called it, known to Altenkirch, Chapman and
+Uustalu as a `relative' monad~\cite{DBLP:conf/csl/AltenkirchR99,DBLP:conf/fossacs/AltenkirchCU10}.
 %format ⊔ = "\F{\sqcup}"
 %format return = "\F{return}"
 %format _>>=_ = _ >>= _
@@ -349,7 +350,7 @@ is given by a mapping on value sets, that mapping need not be an
 flexibility when we interpret small computations as large descriptions
 of datatypes. The upshot is that we are obliged to work polymorphically
 in our set-theoretic magnitude.
-Given the fields `return' and `bind',
+Given the fields |return| and |>>=|,
 we may equip ourselves with Kleisli composition in the
 usual way, replacing each value emerging from |g| with
 the computation indicated by |f|. Of course, we have
@@ -455,8 +456,7 @@ the defining equations of a |foldG| is a |foldG|.
   f == foldG r c
 foldGUnique f r c rq cq = ext help where
   help : (g : _) -> _
-  help (!! x)    =  f (!! x)             =! rq x !>
-                    r x                  !!!
+  help (!! x)    =  f (!! x) =! rq x !> r x !!!
   help (s ?? k)  =  f (s ?? k)           =! cq s k !> 
                     c s (f o k)          =! <^ c s ^> =$= ext (\ t -> help (k t)) !>
                     c s (foldG r c o k)  !!!
@@ -637,8 +637,8 @@ morphMorphism {_}{S}{T} KM KLM h =
                          foldG KMM.return (KMM._>>=_ o h) o foldG f _??_ o g
         =!  <^ (\ k -> k o g) ^>  =$= (
 \end{code}
-Expanding the definition of |KGM.<-<| and focusing our attention before
-the |o g|, we find an opportunity for fusion.
+Expanding |KGM.<-<| and focusing our attention before
+the |o g|, we find a fusion opportunity.
 \begin{code}
                                   foldG KMM.return (KMM._>>=_ o h) o foldG f _??_
             =! foldGFusion KMM.return (KMM._>>=_ o h) f !>
@@ -658,9 +658,8 @@ The lemma we need allows us to fuse any |f KMM.<-< morph KM h| into a
 single |foldG|.
 \morphFusion
 
-Not only does |morph| give us monad morphisms from |General S T|, but
-it gives us the \emph{only} such morphisms, a fact which follows readily
-from the uniqueness of |foldG|.
+Let us check that |morph| give us the \emph{only} monad morphisms from
+|General S T|, using the uniqueness of |foldG|.
 %format MM = "-_{" m "}"
 %format MM.respI = respI "_{" m "}"
 %format MM.respC = respC "_{" m "}"
@@ -860,7 +859,7 @@ and compositionality. The state of the art is the current Agda
 account due to Andreas Abel and colleagues, based on the notion of
 \emph{copatterns}~\cite{DBLP:conf/popl/AbelPTS13} which allow us to
 define lazy data by specifying observations of them, and on
-\emph{sized types}~\cite{Abel:size} which give a more flexible
+\emph{sized types}~\cite{DBLP:phd/de/Abel2007} which give a more flexible
 semantic account of productivity at the cost of additional indexing.
 
 %format Delay = "\D{Delay}"
@@ -869,8 +868,10 @@ semantic account of productivity at the cost of additional indexing.
 %format now = "\C{now}"
 %format later = "\C{later}"
 %format coinductive = "\mathkw{coinductive}"
-Abel and Chapman give a development of Capretta's |Delay| monad
-as a showcase for copatterns and sized types~\cite{abel.james:stlc}.
+Abel and Chapman~\cite{DBLP:journals/corr/AbelC14} give a development
+of normalization for simply typed |\|-calculus, using Capretta's |Delay|
+monad~\cite{DBLP:journals/lmcs/Capretta05}
+as a showcase for copatterns and sized types.
 I will follow their setup, then construct a monad morphism from
 |General|. The essence of their method is to define |Delay| as the
 data type of \emph{observations} of lazy computations,
@@ -909,7 +910,8 @@ underlying functor |X + -|.
 data _+_ (S T : Set) : Set where
   inl  : S -> S + T
   inr  : T -> S + T
-
+\end{code}
+\begin{code}
 [_,_] : {S T X : Set} -> (S -> X) -> (T -> X) -> S + T -> X
 [ f , g ] (inl s) = f s
 [ f , g ] (inr t) = g t
@@ -935,12 +937,13 @@ which can choose either to deliver an |X| or to continue.
 %format _D>=&_ = _ D>=& _
 
 Capretta explored the use of |Delay| as a monad to model general
-recursion, giving an interpretation of the classic language
+recursion, with the |>>=| operator concatenating sequences of |later|s.
+By way of example, he gives an interpretation of the classic language
 with an operator seeking the minimum number satisfying a test.
-Let us therefore equip |Delay| with a `bind' operator. It can be
+Let us therefore equip |Delay| with a |>>=| operator. It can be
 given as an |unfold|, but the direct definition with sized types
 is more straightforward. Abel and Chapman give us the following
-definition, concatenating |later|s.
+definition.
 \begin{code}
 mutual
   _D>=_ :    forall {i A B} ->
@@ -967,8 +970,9 @@ recapitulate their proof.
 %format One = "\D{1}"
 %format * = "\D{\times}"
 It is worth noting that the |Delay| monad is an example of a
-\emph{completely iterative} monad, a \emph{greatest} fixpoint
-|Nu Y. X + F Y|, where the free monad, |General|, is a least fixpoint.
+\emph{completely iterative} monad, a final coalgebra
+|Nu Y. X + F Y|, where the free monad, |General|, is an initial
+algebra~\cite{DBLP:journals/entcs/GhaniLMP01}.
 For |Delay|, take |F Y = Y|, or isomorphically,
 |F Y = One * One -> Y|, representing a trivial request-response
 interaction. That is |Delay| represents processes which must always
@@ -1081,7 +1085,7 @@ data Val (X : Set) : Set where
 \end{code}
 
 Now, in general, we will need to evaluate \emph{closures}---open
-terms paired with suitable environments.
+terms in environments.
 %format Closure = "\D{Closure}"
 %format & = "\C{\vdash}"
 %format _&_ = _ & _
@@ -1113,8 +1117,9 @@ when a $\beta$-redex starts a further evaluation, |call| is called for.
 \end{code}
 
 Thus equipped, |lazy </_/>| is the |Delay|ed version. Abel and
-Chapman give a |Delay|ed interpreter (for typed terms) directly,
-exercising some craft in negotiating size and mutual recursion.
+Chapman give a |Delay|ed interpreter (for typed terms)
+directly, exercising some craft in negotiating size and mutual
+recursion~\cite{DBLP:journals/corr/AbelC14}.
 The |General| construction makes that craft systematic.
 
 
@@ -1152,13 +1157,13 @@ is an inductively defined predicate, classifying the arguments which
 give rise to call trees whose paths are finite. As Ana Bove observed,
 the fact that a function is defined on its domain is a structural
 recursion---the tricky part is to show that the domain predicate
-holds.  However, to support nested recursion, we need to define the
-domain predicate and the resulting output \emph{mutually}. Bove and
-Capretta realised that such mutual definitions are just what we get
-from Dybjer and Setzer's notion of
-\emph{induction-recursion}, giving rise to the `Bove-Capretta method'
-of modelling general recursion and generating termination proof
-obligations.
+holds~\cite{bove:njc}.  However, to support nested recursion, we need
+to define the domain predicate and the resulting output
+\emph{mutually}. Bove and Capretta realised that such mutual
+definitions are just what we get from Dybjer and Setzer's notion of
+\emph{induction-recursion}~\cite{DBLP:conf/tphol/BoveC01,DBLP:conf/dagstuhl/DybjerS01},
+giving rise to the `Bove-Capretta method' of modelling general
+recursion and generating termination proof obligations.
 
 We can make the Bove-Capretta method generic, via the universe encoding
 for (indexed) inductive-recursive sets presented by Dybjer and Setzer.
@@ -1239,7 +1244,7 @@ sized types, we should need to inline |<!_!>out| to expose that guardedness
 to Agda.
 
 Now, as Ghani and Hancock observe, |IR I| is a (relative)
-monad.\footnote{They observe also that |<!_!>Set| and |<!_!>out| form a monad morphism.} Indeed,
+monad \cite{MSC:9428192}.\footnote{They observe also that |<!_!>Set| and |<!_!>out| form a monad morphism.} Indeed,
 it is the free monad generated by |sigma| and |delta|. Its |>>=|
 operator is perfectly standard, concatenating dependent record types.
 I omit the unremarkable proofs of the laws.
@@ -1300,12 +1305,45 @@ total : forall  {S T}(f : PiG S T)(allInDom : (s : S) -> Mu (DOM f) _ s) ->
                 (s : S) -> T s
 total f allInDom = decode o allInDom
 \end{code}
+The absence of |sigma| from |callInDom| tells us that domain evidence
+contains at most zero bits of data and is thus `collapsible' in Edwin
+Brady's sense~\cite{DBLP:conf/types/BradyMM03}, thus enabling |total f|
+to be
+compiled for run time execution exactly as the na\"i{}ve recursive
+definition of |f|.
 
 
-\section{Conclusion}
+\section{Discussion}
 
+We have seen how to separate the business of saying what it is to
+\emph{be} a recursive definition from the details of what it means to
+\emph{run} a recursive program. The former requires only that we work
+in the appropriate free monad to give us an interface permitting the
+recursive calls we need to make. Here, I have considered only
+recursion at a fixed arity, but the method should readily extend to
+partially applied recursive calls, given that we need only account for
+their \emph{syntax} in the first instance. It does not seem like a big
+stretch to expect that the familiar equational style of recursive
+definition could be translated monadically, much as we see in the
+work on algebraic effects.
 
-\bibliographystyle{plainnat}
+The question, then, is not what is \emph{the} semantics for general
+recursion, but rather how to make use of recursive definitions in
+diverse ways by giving appropriate monad morphisms---that is, by
+explaining how each individual call is to be handled. We have seen
+a number of useful possibilities, not least the Bove-Capretta
+domain construction, by which we can seek to establish the totality
+of our function and rescue it from its monadic status.
+
+However, the key message of this paper is that the status of general
+recursive definitions is readily negotiable within a total framework.
+There is no need to give up on the ability either to execute potentially
+nonterminating computations or to be trustably total. There is no
+difference between what you can \emph{do} with a partial language and
+what you can \emph{do} with a total languge: the difference is in what
+you can \emph{know}. The time for wilful ignorance is over.
+
+\bibliographystyle{plain}
 \bibliography{Totality.bib}
 
 \end{document}
