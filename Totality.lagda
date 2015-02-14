@@ -1340,7 +1340,7 @@ recursive definitions is readily negotiable within a total framework.
 There is no need to give up on the ability either to execute potentially
 nonterminating computations or to be trustably total. There is no
 difference between what you can \emph{do} with a partial language and
-what you can \emph{do} with a total languge: the difference is in what
+what you can \emph{do} with a total language: the difference is in what
 you can \emph{know}. The time for wilful ignorance is over.
 
 \bibliographystyle{plain}
